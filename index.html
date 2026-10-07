@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Grupo Ecoquímicas IT Asset Management & Service Desk</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- QRCode Generator Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        eco: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            200: '#bbf7d0',
+                            500: '#22c55e',
+                            600: '#16a34a',
+                            700: '#15803d',
+                            800: '#166534',
+                            900: '#14532d',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="h-full bg-slate-50 text-slate-800 font-sans antialiased overflow-hidden">
+
+    <div id="app" class="h-full flex flex-col">
+        <!-- Rendered via JavaScript -->
+    </div>
+
+    <!-- Hidden inputs for custom background and logos -->
+    <input type="file" id="globalLogoInput" accept="image/*" class="hidden" onchange="handleGlobalLogoUpload(event)">
+    <input type="file" id="customBgImageInput" accept="image/*" class="hidden" onchange="handleCustomBgImageUpload(event)">
+
+    <script>
+        // --- State Management ---
+        const state = {
+            currentUser: null,
+            currentRole: 'admin', // 'admin' or 'user'
+            currentView: 'dashboard',
+            globalLogo: 'https://placehold.co/120x120/166534/ffffff?text=HQ',
+            sidebarCollapsed: false,
+            mobileSidebarOpen: false,
+            customBgColor: '#064e3b',
+            customBgImage: null,
+            loginCardStyle: 'white/95',
+            modifyPagePass: 'ecoquimicas2026*', // Contraseña exclusiva para el apartado "Modificar Página"
+            modifyPageUnlocked: false, // Estado de desbloqueo del apartado maestro
+            
+            // Textos y Títulos Editables Globalmente (Panel Maestro)
+            customTexts: {
+                appName: 'Grupo Ecoquímicas',
+                appSubtitle: 'IT Asset Management & Service Desk',
+                dashboardTitle: 'Panel General',
+                assetsTitle: 'Gestión de Activos e Insumos IT',
+                loansTitle: 'Control de Préstamos Temporales',
+                repairsTitle: 'Control de Reparaciones y Taller',
+                replacementsTitle: 'Registro de Cambios y Reemplazos',
+                ticketsTitle: 'Service Desk & Tickets',
+                companiesTitle: 'Empresas y Sedes',
+                usersTitle: 'Control de Usuarios'
+            },
+
+            companies: [
+                { id: 'ECO-01', name: 'Esencias', code: 'ESEN', logo: 'https://placehold.co/120x120/166534/ffffff?text=ESEN' },
+                { id: 'ECO-02', name: 'Soluciones', code: 'SOL', logo: 'https://placehold.co/120x120/15803d/ffffff?text=SOL' },
+                { id: 'ECO-03', name: 'Siempre Futuro', code: 'SF', logo: 'https://placehold.co/120x120/22c55e/ffffff?text=SF' }
+            ],
+            assets: [],
+            loans: [],
+            repairs: [],
+            replacements: [],
+            tickets: [],
+            users: [
+                { username: 'Kevin_Matt', role: 'Administrador', name: 'Kevin René Mateo García', email: 'kevin.mateo@ecoquimicas.com' }
+            ],
+            authUsers: {
+                'Kevin_Matt': { pass: '240326', role: 'admin' }
+            },
+            assetFilter: '',
+            ticketFilter: '',
+            inventoryTab: 'all'
+        };
+
+        // --- Core UI Renderer ---
+        function render() {
+            const app = document.getElementById('app');
+            if (!state.currentUser) {
+                app.innerHTML = renderLoginScreen();
+            } else {
+                app.innerHTML = renderMainLayout();
+            }
+        }
+
+        function renderLoginScreen() {
+            let bgStyle = `background-color: ${state.customBgColor};`;
+            if (state.customBgImage) {
+                bgStyle += ` background-image: url('${state.customBgImage}'); background-size: cover; background-position: center;`;
+            }
+
+            const cardClassMap = {
+                'white/95': 'bg-white/95 text-slate-800 border-eco-100',
+                'white/80': 'bg-white/80 backdrop-blur-md text-slate-800 border-white/40',
+                'slate-900/90': 'bg-slate-900/90 backdrop-blur-md text-white border-slate-800',
+                'emerald-950/90': 'bg-emerald-950/90 backdrop-blur-md text-white border-emerald-800'
+            };
+            const cardClasses = cardClassMap[state.loginCardStyle] || 'bg-white/95 text-slate-800 border-eco-100';
+            const textHeaderClass = state.loginCardStyle.includes('900') || state.loginCardStyle.includes('950') ? 'text-white' : 'text-slate-900';
+            const subTextClass = state.loginCardStyle.includes('900') || state.loginCardStyle.includes('950') ? 'text-slate-300' : 'text-slate-500';
+            const labelClass = state.loginCardStyle.includes('900') || state.loginCardStyle.includes('950') ? 'text-slate-200' : 'text-slate-600';
+            const inputClass = state.loginCardStyle.includes('900') || state.loginCardStyle.includes('950') ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-400' : 'bg-slate-50 border-slate-200 text-slate-800';
+
+            return `
+                <div class="h-full w-full flex items-center justify-center p-4 transition-all duration-300" style="${bgStyle}">
+                    <div class="${cardClasses} rounded-2xl shadow-2xl w-full max-w-sm p-6 border transition-all duration-300">
+                        <div class="text-center mb-6">
+                            <div class="inline-flex items-center justify-center w-14 h-14 bg-eco-100 text-eco-700 rounded-2xl mb-3 shadow-inner overflow-hidden">
+                                <img src="${state.globalLogo}" alt="Logo" class="w-full h-full object-cover">
+                            </div>
+                            <h1 class="text-xl font-bold ${textHeaderClass}">${state.customTexts.appName}</h1>
+                            <p class="text-xs ${subTextClass} mt-0.5">${state.customTexts.appSubtitle}</p>
+                        </div>
+                        <form onsubmit="handleLogin(event)" class="space-y-4">
+                            <div>
+                                <label class="block text-[11px] font-semibold uppercase tracking-wider ${labelClass} mb-1.5">Usuario</label>
+                                <div class="relative">
+                                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
+                                        <i class="fa-solid fa-user text-xs"></i>
+                                    </span>
+                                    <input type="text" id="loginUser" required placeholder="Usuario..." class="w-full pl-9 pr-3 py-2.5 ${inputClass} border rounded-xl focus:ring-2 focus:ring-eco-500 focus:outline-none text-xs transition">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-semibold uppercase tracking-wider ${labelClass} mb-1.5">Contraseña</label>
+                                <div class="relative">
+                                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
+                                        <i class="fa-solid fa-lock text-xs"></i>
+                                    </span>
+                                    <input type="password" id="loginPass" required placeholder="Contraseña..." class="w-full pl-9 pr-3 py-2.5 ${inputClass} border rounded-xl focus:ring-2 focus:ring-eco-500 focus:outline-none text-xs transition">
+                                </div>
+                            </div>
+                            <button type="submit" class="w-full py-3 bg-eco-600 hover:bg-eco-700 text-white font-semibold rounded-xl shadow-lg shadow-eco-600/30 transition transform active:scale-98 text-xs">
+                                Iniciar Sesión
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderMainLayout() {
+            const sidebarWidth = state.sidebarCollapsed ? 'w-20' : 'w-64';
+            return `
+                <div class="h-full flex overflow-hidden relative">
+                    <!-- Overlay para móvil cuando el menú está abierto -->
+                    ${state.mobileSidebarOpen ? `<div onclick="toggleMobileSidebar()" class="fixed inset-0 bg-slate-900/50 z-30 lg:hidden"></div>` : ''}
+
+                    <!-- Sidebar adaptable para Laptop, Tablet y Móvil -->
+                    <aside class="${sidebarWidth} ${state.mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'} bg-slate-900 text-slate-300 flex flex-col flex-shrink-0 border-r border-slate-800 transition-all duration-300 fixed lg:static inset-y-0 left-0 z-40">
+                        <!-- Botón colapsar para desktop -->
+                        <button onclick="toggleSidebar()" class="hidden lg:flex absolute -right-3 top-6 w-6 h-6 bg-eco-600 text-white rounded-full items-center justify-center shadow-md hover:bg-eco-700 transition z-10 text-xs" title="${state.sidebarCollapsed ? 'Expandir menú' : 'Colapsar menú'}">
+                            <i class="fa-solid ${state.sidebarCollapsed ? 'fa-chevron-right' : 'fa-chevron-left'}"></i>
+                        </button>
+
+                        <div onclick="handleSidebarLogoClick()" class="p-4 flex items-center justify-between lg:justify-start gap-3 cursor-pointer hover:bg-slate-800/60 transition border-b border-slate-800/80 overflow-hidden" title="Ir al menú principal">
+                            <div class="flex items-center gap-3 overflow-hidden">
+                                <div class="w-10 h-10 rounded-xl bg-eco-600 text-white flex items-center justify-center shadow-md shadow-eco-600/30 overflow-hidden flex-shrink-0">
+                                    <img src="${state.globalLogo}" alt="Logo" class="w-full h-full object-cover">
+                                </div>
+                                <div class="${state.sidebarCollapsed ? 'hidden lg:block' : 'block'} overflow-hidden transition-all">
+                                    <h2 class="font-bold text-white text-sm leading-tight truncate">${state.customTexts.appName}</h2>
+                                    <span class="text-[11px] text-eco-400 font-medium">${state.currentRole === 'admin' ? 'Enterprise Suite' : 'Portal Usuario'}</span>
+                                </div>
+                            </div>
+                            <!-- Botón cerrar en móvil -->
+                            <button onclick="toggleMobileSidebar()" class="lg:hidden text-slate-400 hover:text-white p-2">
+                                <i class="fa-solid fa-xmark text-base"></i>
+                            </button>
+                        </div>
+
+                        <nav class="flex-1 px-2 py-4 space-y-1 overflow-y-auto overflow-x-hidden">
+                            ${state.currentRole === 'admin' ? `
+                                <button onclick="navigate('dashboard')" title="${state.customTexts.dashboardTitle}" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition ${state.currentView === 'dashboard' ? 'bg-eco-600 text-white shadow-md shadow-eco-600/20' : 'hover:bg-slate-800 text-slate-400 hover:text-white'}">
+                                    <i class="fa-solid fa-chart-pie w-5 text-center flex-shrink-0"></i> 
+                                    <span class="${state.sidebarCollapsed ? 'hidden lg:inline' : 'inline'} truncate">${state.customTexts.dashboardTitle}</span>
+                                </button>
+                                <button onclick="navigate('assets')" title="${state.customTexts.assetsTitle}" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition ${state.currentView === 'assets' ? 'bg-eco-600 text-white shadow-md shadow-eco-600/20' : 'hover:bg-slate-800 text-slate-400 hover:text-white'}">
+                                    <i class="fa-solid fa-laptop w-5 text-center flex-shrink-0"></i> 
+                                    <span class="${state.sidebarCollapsed ? 'hidden lg:inline' : 'inline'} truncate">${state.customTexts.assetsTitle}</span>
+                                </button>
+                                <button onclick="navigate('loans')" title="${state.customTexts.loansTitle}" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition ${state.currentView === 'loans' ? 'bg-eco-600 text-white shadow-md shadow-eco-600/20' : 'hover:bg-slate-800 text-slate-400 hover:text-white'}">
+                                    <i class="fa-solid fa-hand-holding-medical w-5 text-center flex-shrink-0"></i> 
+                                    <span class="${state.sidebarCollapsed ? 'hidden lg:inline' : 'inline'} truncate">${state.customTexts.loansTitle}</span>
+                                </button>
+                                <button onclick="navigate('repairs')" title="${state.customTexts.repairsTitle}" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition ${state.currentView === 'repairs' ? 'bg-eco-600 text-white shadow-md shadow-eco-600/20' : 'hover:bg-slate-800 text-slate-400 hover:text-white'}">
+                                    <i class="fa-solid fa-screwdriver-wrench w-5 text-center flex-shrink-0"></i> 
+                                    <span class="${state.sidebarCollapsed ? 'hidden lg:inline' : 'inline'} truncate">${state.customTexts.repairsTitle}</span>
+                                </button>
+                                <button onclick="navigate('replacements')" title="${state.customTexts.replacementsTitle}" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition ${state.currentView === 'replacements' ? 'bg-eco-600 text-white shadow-md shadow-eco-600/20' : 'hover:bg-slate-800 text-slate-400 hover:text-white'}">
+                                    <i class="fa-solid fa-rotate w-5 text-center flex-shrink-0"></i> 
+                                    <span class="${state.sidebarCollapsed ? 'hidden lg:inline' : 'inline'} truncate">${state.customTexts.replacementsTitle}</span>
+                                </button>
+                            ` : ''}
+                            <button onclick="navigate('tickets')" title="${state.customTexts.ticketsTitle}" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition ${state.currentView === 'tickets' ? 'bg-eco-600 text-white shadow-md shadow-eco-600/20' : 'hover:bg-slate-800 text-slate-400 hover:text-white'}">
+                                <i class="fa-solid fa-headset w-5 text-center flex-shrink-0"></i> 
+                                <span class="${state.sidebarCollapsed ? 'hidden lg:inline' : 'inline'} truncate">${state.customTexts.ticketsTitle}</span>
+                            </button>
+                            ${state.currentRole === 'admin' ? `
+                                <button onclick="navigate('companies')" title="${state.customTexts.companiesTitle}" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition ${state.currentView === 'companies' ? 'bg-eco-600 text-white shadow-md shadow-eco-600/20' : 'hover:bg-slate-800 text-slate-400 hover:text-white'}">
+                                    <i class="fa-solid fa-building w-5 text-center flex-shrink-0"></i> 
+                                    <span class="${state.sidebarCollapsed ? 'hidden lg:inline' : 'inline'} truncate">${state.customTexts.companiesTitle}</span>
+                                </button>
+                                <button onclick="navigate('users')" title="${state.customTexts.usersTitle}" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition ${state.currentView === 'users' ? 'bg-eco-600 text-white shadow-md shadow-eco-600/20' : 'hover:bg-slate-800 text-slate-400 hover:text-white'}">
+                                    <i class="fa-solid fa-users-gear w-5 text-center flex-shrink-0"></i> 
+                                    <span class="${state.sidebarCollapsed ? 'hidden lg:inline' : 'inline'} truncate">${state.customTexts.usersTitle}</span>
+                                </button>
+                                <button onclick="navigate('customizer')" title="Personalizador UI" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition ${state.currentView === 'customizer' ? 'bg-eco-600 text-white shadow-md shadow-eco-600/20' : 'hover:bg-slate-800 text-slate-400 hover:text-white'}">
+                                    <i class="fa-solid fa-palette w-5 text-center flex-shrink-0"></i> 
+                                    <span class="${state.sidebarCollapsed ? 'hidden lg:inline' : 'inline'} truncate">Personalizador UI</span>
+                                </button>
+                                <!-- APARTADO MAESTRO: Modificar Página con contraseña exclusiva -->
+                                <button onclick="handleModifyPageClick()" title="Modificar Página (Maestro)" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition ${state.currentView === 'modifyPage' ? 'bg-rose-600 text-white shadow-md shadow-rose-600/20' : 'hover:bg-slate-800 text-rose-400 hover:text-rose-300 border border-rose-900/40'}">
+                                    <i class="fa-solid fa-screwdriver-wrench w-5 text-center flex-shrink-0"></i> 
+                                    <span class="${state.sidebarCollapsed ? 'hidden lg:inline' : 'inline'} truncate font-bold">Modificar Página</span>
+                                </button>
+                            ` : ''}
+                        </nav>
+
+                        <div class="p-3 border-t border-slate-800 bg-slate-950/40">
+                            <div class="flex items-center ${state.sidebarCollapsed ? 'justify-center lg:justify-center' : 'justify-between'}">
+                                <div class="flex items-center gap-3 overflow-hidden">
+                                    <div class="w-9 h-9 rounded-full bg-slate-800 text-eco-400 flex items-center justify-center font-bold text-xs border border-slate-700 flex-shrink-0">
+                                        ${state.currentUser.substring(0,2).toUpperCase()}
+                                    </div>
+                                    <div class="${state.sidebarCollapsed ? 'hidden lg:block' : 'block'} overflow-hidden">
+                                        <p class="text-xs font-semibold text-white truncate">${state.currentUser}</p>
+                                        <p class="text-[10px] text-eco-400">${state.currentRole === 'admin' ? 'Administrador' : 'Usuario Normal'}</p>
+                                    </div>
+                                </div>
+                                <button onclick="logout()" class="text-slate-400 hover:text-red-400 p-2 rounded-lg transition ${state.sidebarCollapsed ? 'hidden lg:block' : 'block'}" title="Cerrar Sesión">
+                                    <i class="fa-solid fa-right-from-bracket"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </aside>
+
+                    <div class="flex-1 flex flex-col min-w-0 bg-slate-50">
+                        <header class="bg-white border-b border-slate-200 px-4 sm:px-6 py-3.5 flex items-center justify-between shadow-xs">
+                            <div class="flex items-center gap-3">
+                                <button onclick="toggleMobileSidebar()" class="lg:hidden p-2 text-slate-600 hover:text-slate-900 rounded-xl hover:bg-slate-100 transition">
+                                    <i class="fa-solid fa-bars text-base"></i>
+                                </button>
+                                <h2 class="text-base sm:text-lg font-bold text-slate-900 capitalize truncate">${getViewTitle()}</h2>
+                            </div>
+                            <div class="flex items-center gap-2 sm:gap-3">
+                                <button onclick="downloadAppFile()" class="inline-flex items-center gap-2 px-3 sm:px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-md shadow-emerald-600/20 transition">
+                                    <i class="fa-solid fa-download"></i> <span class="hidden sm:inline">Descargar Aplicación</span><span class="sm:hidden">App</span>
+                                </button>
+                                <div class="hidden sm:block h-6 w-px bg-slate-200"></div>
+                                <div class="hidden sm:flex items-center gap-2 text-xs font-medium text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl">
+                                    <i class="fa-solid fa-shield-halved text-eco-600"></i>
+                                    <span>${state.currentRole === 'admin' ? 'Admin' : 'Usuario'}</span>
+                                </div>
+                            </div>
+                        </header>
+
+                        <main class="flex-1 overflow-y-auto p-4 sm:p-6">
+                            ${renderCurrentView()}
+                        </main>
+                    </div>
+                </div>
+            `;
+        }
+
+        function toggleSidebar() {
+            state.sidebarCollapsed = !state.sidebarCollapsed;
+            render();
+        }
+
+        function toggleMobileSidebar() {
+            state.mobileSidebarOpen = !state.mobileSidebarOpen;
+            render();
+        }
+
+        function getViewTitle() {
+            switch(state.currentView) {
+                case 'dashboard': return state.customTexts.dashboardTitle;
+                case 'assets': return state.customTexts.assetsTitle;
+                case 'loans': return state.customTexts.loansTitle;
+                case 'repairs': return state.customTexts.repairsTitle;
+                case 'replacements': return state.customTexts.replacementsTitle;
+                case 'tickets': return state.customTexts.ticketsTitle;
+                case 'companies': return state.customTexts.companiesTitle;
+                case 'users': return state.customTexts.usersTitle;
+                case 'customizer': return 'Personalizador UI';
+                case 'modifyPage': return 'Modificación Maestra del Sistema';
+                default: return 'Panel';
+            }
+        }
+
+        function renderCurrentView() {
+            if (state.currentRole === 'user' && state.currentView !== 'tickets') {
+                state.currentView = 'tickets';
+            }
+            switch(state.currentView) {
+                case 'dashboard': return renderDashboard();
+                case 'assets': return renderAssets();
+                case 'loans': return renderLoans();
+                case 'repairs': return renderRepairs();
+                case 'replacements': return renderReplacements();
+                case 'tickets': return renderTickets();
+                case 'companies': return renderCompanies();
+                case 'users': return renderUsers();
+                case 'customizer': return renderCustomizer();
+                case 'modifyPage': return renderModifyPage();
+                default: return '<div class="text-slate-500">Vista no encontrada</div>';
+            }
+        }
+
+        function handleSidebarLogoClick() {
+            state.currentView = state.currentRole === 'admin' ? 'dashboard' : 'tickets';
+            state.mobileSidebarOpen = false;
+            render();
+        }
+
+        // --- MANEJADOR DE ACCESO AL APARTADO "MODIFICAR PÁGINA" ---
+        function handleModifyPageClick() {
+            state.mobileSidebarOpen = false;
+            if (state.modifyPageUnlocked) {
+                state.currentView = 'modifyPage';
+                render();
+            } else {
+                openModifyPageAuthModal();
+            }
+        }
+
+        function openModifyPageAuthModal() {
+            const modal = document.createElement('div');
+            modal.id = 'authModalOverlay';
+            modal.className = 'fixed inset-0 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center z-50 p-4';
+            modal.innerHTML = `
+                <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 border border-slate-200 animate-in fade-in zoom-in duration-200">
+                    <div class="text-center mb-5">
+                        <div class="inline-flex items-center justify-center w-12 h-12 bg-rose-50 text-rose-600 rounded-2xl mb-2 shadow-inner">
+                            <i class="fa-solid fa-lock text-lg"></i>
+                        </div>
+                        <h3 class="font-bold text-slate-900 text-base">Acceso Restringido - Modificar Página</h3>
+                        <p class="text-xs text-slate-500 mt-1">Ingrese la contraseña exclusiva de administración maestra para modificar todo el sistema.</p>
+                    </div>
+                    <form onsubmit="verifyModifyPagePassword(event)" class="space-y-4">
+                        <div>
+                            <input type="password" id="masterPasswordInput" required placeholder="Contraseña maestra..." class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-rose-500 focus:outline-none">
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <button type="button" onclick="document.getElementById('authModalOverlay').remove()" class="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs transition">Cancelar</button>
+                            <button type="submit" class="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-xl text-xs transition shadow-md shadow-rose-600/30">Desbloquear</button>
+                        </div>
+                    </form>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        function verifyModifyPagePassword(e) {
+            e.preventDefault();
+            const pass = document.getElementById('masterPasswordInput').value;
+            if (pass === state.modifyPagePass) {
+                state.modifyPageUnlocked = true;
+                state.currentView = 'modifyPage';
+                const modal = document.getElementById('authModalOverlay');
+                if (modal) modal.remove();
+                render();
+            } else {
+                alert('Contraseña maestra incorrecta.');
+            }
+        }
+
+        // --- VISTA DE MODIFICACIÓN MAESTRA AMPLIADA ---
+        function renderModifyPage() {
+            if (state.currentRole !== 'admin' || !state.modifyPageUnlocked) return '<div class="p-6 text-slate-500">Acceso no autorizado.</div>';
+            return `
+                <div class="space-y-6 max-w-4xl pb-12">
+                    <div class="bg-gradient-to-r from-rose-900 to-slate-900 p-6 rounded-2xl text-white shadow-lg space-y-2">
+                        <div class="flex items-center gap-3">
+                            <i class="fa-solid fa-triangle-exclamation text-amber-400 text-xl"></i>
+                            <h3 class="font-bold text-lg">Panel Maestro de Modificación Global ("Modificar Página")</h3>
+                        </div>
+                        <p class="text-xs text-slate-300">Controla nombres, logotipos, contraseñas de acceso y correos electrónicos de todos los usuarios desde un solo lugar centralizado.</p>
+                    </div>
+
+                    <!-- 1. Editor de Textos y Títulos Generales -->
+                    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+                        <h4 class="font-bold text-slate-900 text-sm flex items-center gap-2">
+                            <i class="fa-solid fa-font text-eco-600"></i> Modificar Textos y Títulos Generales de la Interfaz
+                        </h4>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Nombre General de la App</label>
+                                <input type="text" id="editAppName" value="${state.customTexts.appName}" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Subtítulo de la App</label>
+                                <input type="text" id="editAppSubtitle" value="${state.customTexts.appSubtitle}" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none">
+                            </div>
+                        </div>
+                        <div class="pt-2">
+                            <button onclick="saveCustomTextsMaster()" class="px-4 py-2.5 bg-eco-600 hover:bg-eco-700 text-white font-semibold rounded-xl text-xs transition shadow-md shadow-eco-600/20">Guardar Textos</button>
+                        </div>
+                    </div>
+
+                    <!-- 2. Configuración de Credencial Maestra -->
+                    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+                        <h4 class="font-bold text-slate-900 text-sm flex items-center gap-2">
+                            <i class="fa-solid fa-key text-rose-600"></i> Cambiar Contraseña Maestra de este Apartado
+                        </h4>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Nueva Contraseña Maestra</label>
+                                <input type="text" id="newMasterPass" value="${state.modifyPagePass}" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none font-mono">
+                            </div>
+                            <div class="flex items-end">
+                                <button onclick="saveNewMasterPassword()" class="w-full py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-xl text-xs transition">Actualizar Clave Maestra</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3. Gestión Total de Usuarios (Contraseñas y Correos) -->
+                    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+                        <div class="flex items-center justify-between">
+                            <h4 class="font-bold text-slate-900 text-sm flex items-center gap-2">
+                                <i class="fa-solid fa-users-gear text-eco-600"></i> Gestión de Accesos, Correos y Credenciales de Usuarios
+                            </h4>
+                            <button onclick="openAddUserModal()" class="px-3 py-1.5 bg-eco-600 hover:bg-eco-700 text-white text-xs font-semibold rounded-xl transition">Agregar Usuario</button>
+                        </div>
+                        <div class="space-y-2">
+                            ${state.users.map(u => `
+                                <div class="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 bg-slate-50 rounded-xl border border-slate-100 text-xs gap-3">
+                                    <div>
+                                        <p class="font-bold text-slate-900">${u.name} <span class="font-mono text-eco-600">(@${u.username})</span></p>
+                                        <p class="text-[11px] text-slate-500 mt-0.5">Correo: <span class="font-medium text-slate-700">${u.email}</span> • Rol: <span class="font-semibold">${u.role}</span></p>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <button onclick="openEditUserEmailModal('${u.username}')" class="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold rounded-lg transition">Editar Correo</button>
+                                        <button onclick="openEditUserPassModal('${u.username}')" class="px-3 py-1.5 bg-eco-100 hover:bg-eco-200 text-eco-800 font-semibold rounded-lg transition">Cambiar Clave</button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function saveCustomTextsMaster() {
+            state.customTexts.appName = document.getElementById('editAppName').value.trim() || state.customTexts.appName;
+            state.customTexts.appSubtitle = document.getElementById('editAppSubtitle').value.trim() || state.customTexts.appSubtitle;
+            alert('¡Textos actualizados correctamente!');
+            render();
+        }
+
+        function saveNewMasterPassword() {
+            const val = document.getElementById('newMasterPass').value.trim();
+            if (val) {
+                state.modifyPagePass = val;
+                alert('¡Contraseña maestra actualizada con éxito!');
+                render();
+            }
+        }
+
+        function openEditUserEmailModal(username) {
+            const uObj = state.users.find(u => u.username === username);
+            const modal = document.createElement('div');
+            modal.id = 'userEmailModal';
+            modal.className = 'fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4';
+            modal.innerHTML = `
+                <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 border border-slate-100 text-xs">
+                    <h3 class="font-bold text-slate-900 text-sm mb-3">Editar Correo para @${username}</h3>
+                    <div class="space-y-3">
+                        <input type="email" id="newEmailForUser" value="${uObj.email}" placeholder="correo@ecoquimicas.com" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none">
+                    </div>
+                    <div class="flex items-center justify-end gap-2 mt-4">
+                        <button onclick="document.getElementById('userEmailModal').remove()" class="px-3 py-2 bg-slate-100 text-slate-700 rounded-xl font-semibold">Cancelar</button>
+                        <button onclick="saveUserEmail('${username}')" class="px-3 py-2 bg-eco-600 text-white rounded-xl font-semibold">Guardar</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        function saveUserEmail(username) {
+            const newEmail = document.getElementById('newEmailForUser').value.trim();
+            const uObj = state.users.find(u => u.username === username);
+            if (newEmail && uObj) {
+                uObj.email = newEmail;
+                alert(`Correo actualizado para ${username}`);
+                document.getElementById('userEmailModal').remove();
+                render();
+            }
+        }
+
+        function openEditUserPassModal(username) {
+            const modal = document.createElement('div');
+            modal.id = 'userPassModal';
+            modal.className = 'fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4';
+            modal.innerHTML = `
+                <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 border border-slate-100 text-xs">
+                    <h3 class="font-bold text-slate-900 text-sm mb-3">Cambiar Contraseña para @${username}</h3>
+                    <div class="space-y-3">
+                        <input type="text" id="newPassForUser" placeholder="Nueva contraseña..." class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none">
+                    </div>
+                    <div class="flex items-center justify-end gap-2 mt-4">
+                        <button onclick="document.getElementById('userPassModal').remove()" class="px-3 py-2 bg-slate-100 text-slate-700 rounded-xl font-semibold">Cancelar</button>
+                        <button onclick="saveUserPass('${username}')" class="px-3 py-2 bg-eco-600 text-white rounded-xl font-semibold">Guardar</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        function saveUserPass(username) {
+            const p = document.getElementById('newPassForUser').value.trim();
+            if (p && state.authUsers[username]) {
+                state.authUsers[username].pass = p;
+                alert(`Contraseña actualizada para ${username}`);
+                document.getElementById('userPassModal').remove();
+                render();
+            }
+        }
+
+        function renderCustomizer() {
+            if (state.currentRole !== 'admin') return '<div class="p-6 text-slate-500">Acceso restringido.</div>';
+            return `
+                <div class="space-y-6 max-w-3xl">
+                    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-5">
+                        <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
+                            <i class="fa-solid fa-palette text-eco-600"></i> Personalización de Apariencia del Sistema
+                        </h3>
+                        <p class="text-xs text-slate-500">Configura el fondo de pantalla y el diseño de la tarjeta de inicio de sesión.</p>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                            <div class="space-y-2">
+                                <label class="block text-xs font-bold uppercase tracking-wider text-slate-700">Color de Fondo Principal</label>
+                                <div class="flex items-center gap-3">
+                                    <input type="color" id="bgColorPicker" value="${state.customBgColor}" onchange="updateCustomBg(this.value)" class="w-12 h-10 rounded-xl border border-slate-200 cursor-pointer p-1 bg-white">
+                                    <span class="text-xs font-mono text-slate-600">${state.customBgColor}</span>
+                                </div>
+                            </div>
+                            <div class="space-y-2">
+                                <label class="block text-xs font-bold uppercase tracking-wider text-slate-700">Imagen de Fondo Personalizada</label>
+                                <div class="flex items-center gap-2">
+                                    <button onclick="document.getElementById('customBgImageInput').click()" class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition flex items-center gap-2">
+                                        <i class="fa-solid fa-upload"></i> Subir Imagen
+                                    </button>
+                                    ${state.customBgImage ? `<button onclick="removeCustomBgImage()" class="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-semibold rounded-xl transition">Quitar</button>` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function updateCustomBg(colorHex) {
+            state.customBgColor = colorHex;
+            render();
+        }
+
+        function handleCustomBgImageUpload(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    state.customBgImage = event.target.result;
+                    render();
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function removeCustomBgImage() {
+            state.customBgImage = null;
+            render();
+        }
+
+        function renderDashboard() {
+            const totalAssets = state.assets.filter(a => a.category !== 'Insumos').length;
+            const totalInsumos = state.assets.filter(a => a.category === 'Insumos').reduce((acc, curr) => acc + (curr.quantity || 1), 0);
+            const activeTickets = state.tickets.filter(t => t.status !== 'Resuelto').length;
+            const totalCompanies = state.companies.length;
+
+            return `
+                <div class="space-y-6">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+                            <div>
+                                <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Activos IT</p>
+                                <p class="text-2xl font-bold text-slate-900 mt-1">${totalAssets}</p>
+                            </div>
+                            <div class="w-12 h-12 bg-eco-50 text-eco-600 rounded-xl flex items-center justify-center text-xl shadow-inner">
+                                <i class="fa-solid fa-laptop"></i>
+                            </div>
+                        </div>
+                        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+                            <div>
+                                <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Insumos en Bodega</p>
+                                <p class="text-2xl font-bold text-slate-900 mt-1">${totalInsumos} un.</p>
+                            </div>
+                            <div class="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center text-xl shadow-inner">
+                                <i class="fa-solid fa-boxes-stacked"></i>
+                            </div>
+                        </div>
+                        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+                            <div>
+                                <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Tickets Activos</p>
+                                <p class="text-2xl font-bold text-slate-900 mt-1">${activeTickets}</p>
+                            </div>
+                            <div class="w-12 h-12 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center text-xl shadow-inner">
+                                <i class="fa-solid fa-headset"></i>
+                            </div>
+                        </div>
+                        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+                            <div>
+                                <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Empresas / Sedes</p>
+                                <p class="text-2xl font-bold text-slate-900 mt-1">${totalCompanies}</p>
+                            </div>
+                            <div class="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center text-xl shadow-inner">
+                                <i class="fa-solid fa-building"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderAssets() {
+            const categories = ['all', 'Laptop', 'Desktop', 'Impresoras', 'Periféricos', 'Celulares', 'Redes', 'Insumos'];
+            const displayedAssets = state.assets.filter(a => {
+                const matchesSearch = a.name.toLowerCase().includes(state.assetFilter.toLowerCase()) ||
+                    a.serial.toLowerCase().includes(state.assetFilter.toLowerCase()) ||
+                    a.assignedTo.toLowerCase().includes(state.assetFilter.toLowerCase());
+                if (state.inventoryTab !== 'all') {
+                    return matchesSearch && a.category === state.inventoryTab;
+                }
+                return matchesSearch;
+            });
+
+            return `
+                <div class="space-y-6">
+                    <div class="flex flex-wrap items-center gap-2 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs overflow-x-auto">
+                        ${categories.map(cat => `
+                            <button onclick="state.inventoryTab = '${cat}'; render();" class="px-3.5 py-2 text-xs font-semibold rounded-xl transition whitespace-nowrap ${state.inventoryTab === cat ? 'bg-eco-600 text-white shadow-md shadow-eco-600/20' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">
+                                ${cat === 'all' ? '<i class="fa-solid fa-server mr-1"></i> Todos' : cat}
+                            </button>
+                        `).join('')}
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+                        <div class="w-full sm:w-80 relative">
+                            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
+                                <i class="fa-solid fa-search"></i>
+                            </span>
+                            <input type="text" id="assetSearch" oninput="state.assetFilter = this.value; render();" value="${state.assetFilter}" placeholder="Buscar activo, marca, modelo o serie..." class="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-eco-500 focus:outline-none">
+                        </div>
+                        ${state.currentRole === 'admin' ? `
+                            <button onclick="openAddAssetModal()" class="w-full sm:w-auto px-4 py-2 bg-eco-600 hover:bg-eco-700 text-white text-xs font-semibold rounded-xl shadow-md shadow-eco-600/20 transition flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-plus"></i> Registrar Nuevo Activo IT / Insumo
+                            </button>
+                        ` : ''}
+                    </div>
+
+                    <div class="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                                        <th class="p-4">Ítem / Marca y Modelo / Serie</th>
+                                        <th class="p-4">Categoría</th>
+                                        <th class="p-4">Ubicación</th>
+                                        <th class="p-4">Asignado a</th>
+                                        <th class="p-4">Estado</th>
+                                        <th class="p-4 text-center">Ficha / QR</th>
+                                        ${state.currentRole === 'admin' ? '<th class="p-4 text-right">Acciones</th>' : ''}
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100 text-xs">
+                                    ${displayedAssets.map(asset => `
+                                        <tr class="hover:bg-slate-50/80 transition">
+                                            <td class="p-4 font-bold text-slate-900">${asset.name}</td>
+                                            <td class="p-4">${asset.category}</td>
+                                            <td class="p-4">${asset.extraLocation || 'N/A'}</td>
+                                            <td class="p-4">${asset.assignedTo}</td>
+                                            <td class="p-4">${asset.status}</td>
+                                            <td class="p-4 text-center">
+                                                <button onclick="showQRModal('${asset.id}')" class="px-3 py-1.5 bg-slate-100 hover:bg-eco-100 text-slate-700 font-semibold rounded-lg">QR</button>
+                                            </td>
+                                            ${state.currentRole === 'admin' ? `<td class="p-4 text-right"><button onclick="deleteAsset('${asset.id}')" class="text-slate-400 hover:text-red-500"><i class="fa-solid fa-trash"></i></button></td>` : ''}
+                                        </tr>
+                                    `).join('')}
+                                    ${displayedAssets.length === 0 ? `<tr><td colspan="7" class="p-8 text-center text-slate-400">No hay activos registrados en el inventario.</td></tr>` : ''}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderLoans() { return '<div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs text-xs text-slate-500">No hay préstamos registrados.</div>'; }
+        function renderRepairs() { return '<div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs text-xs text-slate-500">No hay reparaciones registradas.</div>'; }
+        function renderReplacements() { return '<div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs text-xs text-slate-500">No hay reemplazos registrados.</div>'; }
+        
+        function renderTickets() {
+            return `
+                <div class="space-y-6">
+                    <div class="flex items-center justify-between bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+                        <span class="text-xs text-slate-500">Panel de Service Desk y Tickets de Soporte</span>
+                        <button onclick="openAddTicketModal()" class="px-4 py-2 bg-eco-600 hover:bg-eco-700 text-white text-xs font-semibold rounded-xl shadow-md transition">Crear Nuevo Ticket</button>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        ${state.tickets.map(ticket => `
+                            <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
+                                <div>
+                                    <h4 class="font-bold text-slate-900 text-sm mb-1">${ticket.title}</h4>
+                                    <p class="text-xs text-slate-600 mb-3">${ticket.description}</p>
+                                </div>
+                                <span class="px-2.5 py-1 text-[10px] font-bold rounded-full bg-rose-100 text-rose-700 w-fit">${ticket.status}</span>
+                            </div>
+                        `).join('')}
+                        ${state.tickets.length === 0 ? '<div class="col-span-full bg-white p-8 rounded-2xl border border-slate-200 text-center text-slate-400 text-xs">No hay tickets registrados en el sistema.</div>' : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderCompanies() {
+            return `
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    ${state.companies.map(c => `
+                        <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-4">
+                            <img src="${c.logo}" alt="Logo" class="w-14 h-14 rounded-2xl object-cover border bg-slate-50">
+                            <div>
+                                <h3 class="font-bold text-slate-900 text-sm">${c.name}</h3>
+                                <p class="text-xs text-eco-600 font-semibold">Código: ${c.code}</p>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function renderUsers() {
+            return `
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-200 font-bold text-slate-500 uppercase">
+                                <th class="p-4">Usuario</th>
+                                <th class="p-4">Nombre</th>
+                                <th class="p-4">Correo</th>
+                                <th class="p-4">Rol</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            ${state.users.map(u => `
+                                <tr class="hover:bg-slate-50">
+                                    <td class="p-4 font-bold font-mono">@${u.username}</td>
+                                    <td class="p-4">${u.name}</td>
+                                    <td class="p-4">${u.email}</td>
+                                    <td class="p-4 font-semibold text-eco-700">${u.role}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        function handleLogin(e) {
+            e.preventDefault();
+            const u = document.getElementById('loginUser').value.trim();
+            const p = document.getElementById('loginPass').value.trim();
+            if (state.authUsers[u] && state.authUsers[u].pass === p) {
+                state.currentUser = u;
+                state.currentRole = state.authUsers[u].role;
+                state.currentView = 'dashboard';
+                render();
+            } else {
+                alert('Usuario o contraseña incorrectos');
+            }
+        }
+
+        function logout() {
+            state.currentUser = null;
+            state.currentRole = 'admin';
+            render();
+        }
+
+        function navigate(view) {
+            state.currentView = view;
+            state.mobileSidebarOpen = false;
+            render();
+        }
+
+        function openAddTicketModal() {
+            const title = prompt("Título del ticket:");
+            if (title) {
+                const description = prompt("Descripción:");
+                state.tickets.unshift({ id: 'TKT-' + Math.floor(100+Math.random()*900), title, description, status: 'Abierto', requester: state.currentUser, date: '2026-10-07' });
+                render();
+            }
+        }
+
+        function downloadAppFile() {
+            const htmlContent = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+            const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'grupo_ecoquimicas_it_system.html';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        window.onload = function() { render(); };
+    </script>
+</body>
+</html>
